@@ -9,8 +9,8 @@ import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 const FEATURES = [
   {
     icon: Sparkles,
-    title: "10 רעיונות בלחיצה",
-    desc: "כל יצירה מחזירה עשרה ציטוטים, עצות וטיפים מעשיים בעברית.",
+    title: "6 רעיונות בלחיצה",
+    desc: "כל יצירה מחזירה שישה ציטוטים, עצות וטיפים מעשיים בעברית.",
   },
   {
     icon: BookmarkCheck,

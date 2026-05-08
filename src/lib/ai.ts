@@ -5,7 +5,7 @@ import { z } from "zod";
 /**
  * AI generation layer.
  *
- * Provider-agnostic wrapper that returns 10 unique Hebrew motivation
+ * Provider-agnostic wrapper that returns 6 unique Hebrew motivation
  * items in a strict JSON shape. Switch providers via `AI_PROVIDER` env.
  */
 
@@ -30,8 +30,10 @@ export const motivationItemSchema = z.object({
   category: z.string().min(2).max(40),
 });
 
+export const MOTIVATION_ITEM_COUNT = 6;
+
 export const motivationResponseSchema = z.object({
-  items: z.array(motivationItemSchema).length(10),
+  items: z.array(motivationItemSchema).length(MOTIVATION_ITEM_COUNT),
 });
 
 export type MotivationItem = z.infer<typeof motivationItemSchema>;
@@ -44,7 +46,7 @@ export interface GenerateOptions {
 }
 
 const SYSTEM_PROMPT = `אתה מאמן מוטיבציה ופיתוח אישי בעברית.
-המשימה שלך: לייצר 10 פריטי מוטיבציה ייחודיים, מעוררי השראה ומעשיים, כולם בעברית בלבד.
+המשימה שלך: לייצר 6 פריטי מוטיבציה ייחודיים, מעוררי השראה ומעשיים, כולם בעברית בלבד.
 
 חוקים מחייבים:
 - כל פריט חייב להיות שונה מהאחרים – ללא חזרות רעיון או ניסוח.
@@ -56,7 +58,7 @@ const SYSTEM_PROMPT = `אתה מאמן מוטיבציה ופיתוח אישי ב
 function buildUserPrompt(opts: GenerateOptions): string {
   const allowed = MOTIVATION_CATEGORIES.join(", ");
   const lines: string[] = [
-    `ייצר 10 פריטי מוטיבציה ייחודיים בעברית.`,
+    `ייצר 6 פריטי מוטיבציה ייחודיים בעברית.`,
     `קטגוריות מותרות: ${allowed}.`,
   ];
   if (opts.topic) lines.push(`התמקד בנושא: ${opts.topic}.`);
@@ -67,7 +69,7 @@ function buildUserPrompt(opts: GenerateOptions): string {
     );
   }
   lines.push(
-    `החזר אך ורק JSON תקף עם השדה "items" המכיל מערך של 10 אובייקטים.`,
+    `החזר אך ורק JSON תקף עם השדה "items" המכיל מערך של 6 אובייקטים.`,
   );
   return lines.join("\n");
 }
@@ -141,7 +143,7 @@ async function generateWithOpenAI(
 }
 
 /**
- * Generate 10 unique Hebrew motivation items via the configured provider.
+ * Generate 6 unique Hebrew motivation items via the configured provider.
  * Falls back to a deterministic local sample only if the provider call
  * fails AND the env doesn't disallow fallbacks (set AI_STRICT=1 in prod).
  */

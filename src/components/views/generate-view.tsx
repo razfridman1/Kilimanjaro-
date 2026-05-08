@@ -180,7 +180,7 @@ export function GenerateView() {
                 ) : (
                   <>
                     <Wand2 className="h-5 w-5" />
-                    תן לי 10
+                    תן לי 6
                   </>
                 )}
               </Button>
@@ -215,7 +215,7 @@ export function GenerateView() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-display text-2xl font-bold">
-                  עשרה רעיונות בשבילך
+                  שישה רעיונות בשבילך
                 </h2>
                 <Button
                   variant="outline"
@@ -253,7 +253,7 @@ export function GenerateView() {
               </div>
               <h3 className="text-lg font-semibold">מוכן להתחיל?</h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                לחץ על "תן לי 10" ותקבל עשרה רעיונות חדשים בעברית. כל פריט
+                לחץ על "תן לי 6" ותקבל שישה רעיונות חדשים בעברית. כל פריט
                 כולל כותרת, תוכן וקטגוריה – ניתן לשמור, לסווג ולחזור אליו.
               </p>
             </motion.div>
