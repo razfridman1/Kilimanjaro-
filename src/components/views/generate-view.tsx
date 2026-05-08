@@ -9,7 +9,23 @@ import {
   RefreshCw,
   History,
   ChevronDown,
+  Bookmark,
+  BookmarkCheck,
+  Heart,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Copy,
+  Share2,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -508,22 +524,17 @@ export function GenerateView() {
           </div>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleHistory.map((item, idx) => (
-                <div key={item.id} className="space-y-1.5">
-                  <MotivationCard
-                    item={item}
-                    index={idx}
-                    onSave={handleSave}
-                    onUnsave={handleUnsave}
-                    onToggleFavorite={handleToggleFavorite}
-                    onEdit={openEdit}
-                    onDelete={handleDeleteQuote}
-                  />
-                  <p className="px-2 text-[11px] text-muted-foreground">
-                    נוצר ב-{formatHebrewDate(item.createdAt)}
-                  </p>
-                </div>
+            <div className="flex flex-col gap-2">
+              {visibleHistory.map((item) => (
+                <HistoryRow
+                  key={item.id}
+                  item={item}
+                  onSave={handleSave}
+                  onUnsave={handleUnsave}
+                  onToggleFavorite={handleToggleFavorite}
+                  onEdit={openEdit}
+                  onDelete={handleDeleteQuote}
+                />
               ))}
             </div>
             {historyHasMore && (
@@ -622,6 +633,187 @@ export function GenerateView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// HistoryRow — compact, vertical, single-row representation of a past
+// motivation item. Used inside the History section.
+// ----------------------------------------------------------------------
+
+interface HistoryRowProps {
+  item: HistoryItem;
+  onSave: (item: MotivationCardData) => Promise<void> | void;
+  onUnsave: (item: MotivationCardData) => Promise<void> | void;
+  onToggleFavorite: (item: MotivationCardData) => Promise<void> | void;
+  onEdit: (item: MotivationCardData) => void;
+  onDelete: (item: MotivationCardData) => Promise<void> | void;
+}
+
+function HistoryRow({
+  item,
+  onSave,
+  onUnsave,
+  onToggleFavorite,
+  onEdit,
+  onDelete,
+}: HistoryRowProps) {
+  const { toast } = useToast();
+  const [pending, startTransition] = React.useTransition();
+
+  const toggleSave = () =>
+    startTransition(async () => {
+      try {
+        await (item.saved ? onUnsave(item) : onSave(item));
+      } catch (err) {
+        toast({
+          title: "שגיאה",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
+      }
+    });
+
+  const toggleFav = () =>
+    startTransition(async () => {
+      try {
+        await onToggleFavorite(item);
+      } catch (err) {
+        toast({
+          title: "שגיאה",
+          variant: "destructive",
+          description: err instanceof Error ? err.message : undefined,
+        });
+      }
+    });
+
+  const handleDelete = () => {
+    if (typeof window !== "undefined" && !window.confirm("למחוק את הפריט הזה?"))
+      return;
+    startTransition(async () => {
+      try {
+        await onDelete(item);
+        toast({ title: "נמחק" });
+      } catch (err) {
+        toast({
+          title: "שגיאה במחיקה",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${item.title}\n\n${item.content}`);
+      toast({ title: "הועתק ללוח" });
+    } catch {
+      toast({ title: "לא ניתן להעתיק", variant: "destructive" });
+    }
+  };
+
+  const handleShare = async () => {
+    const text = `${item.title}\n\n${item.content}`;
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try {
+        await navigator.share({ title: item.title, text });
+        return;
+      } catch {
+        /* canceled */
+      }
+    }
+    handleCopy();
+  };
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-card/40 p-3 transition-colors hover:bg-card/70 sm:p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="text-[10px]">
+              {item.category}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              {formatHebrewDate(item.createdAt)}
+            </span>
+          </div>
+          <h3 className="mb-0.5 line-clamp-1 text-base font-semibold leading-tight">
+            {item.title}
+          </h3>
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {item.content}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleSave}
+            disabled={pending}
+            aria-label={item.saved ? "הסר מהשמורים" : "שמור"}
+            className="h-8 w-8"
+          >
+            {item.saved ? (
+              <BookmarkCheck className="h-4 w-4 text-primary" />
+            ) : (
+              <Bookmark className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleFav}
+            disabled={pending}
+            aria-label="מועדף"
+            className="h-8 w-8"
+          >
+            <Heart
+              className={
+                item.isFavorite
+                  ? "h-4 w-4 fill-rose-500 text-rose-500"
+                  : "h-4 w-4"
+              }
+            />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="עוד"
+                className="h-8 w-8"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCopy}>
+                <Copy className="me-2 h-4 w-4" />
+                העתק
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShare}>
+                <Share2 className="me-2 h-4 w-4" />
+                שתף
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onEdit(item)}>
+                <Pencil className="me-2 h-4 w-4" />
+                ערוך
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="me-2 h-4 w-4" />
+                מחק לצמיתות
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
     </div>
   );
 }
