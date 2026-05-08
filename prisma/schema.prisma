@@ -1,0 +1,150 @@
+// =====================================================================
+// Motivation App - Prisma Schema
+// Multi-tenant by design: every data row carries a tenantId, and all
+// queries MUST filter by tenantId (see src/lib/tenant.ts).
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- Tenants -----------------------------------------------------------
+// A tenant maps 1:1 to a Clerk Organization (or the user's "personal"
+// workspace if they have no org). All other rows are scoped to a tenant.
+model Tenant {
+  id              String        @id @default(cuid())
+  // Clerk org id (org_...) OR a synthetic "personal_<userId>" id.
+  clerkOrgId      String        @unique
+  name            String
+  slug            String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  users           User[]
+  generatedQuotes GeneratedQuote[]
+  savedQuotes     SavedQuote[]
+  categories      Category[]
+
+  @@map("tenants")
+}
+
+// ----- Users -------------------------------------------------------------
+// A user can technically belong to multiple tenants (orgs) but for this
+// MVP we keep the active tenant linkage on Clerk's side and resolve it
+// per-request. We still store one local row per (clerk user, tenant).
+model User {
+  id              String        @id @default(cuid())
+  clerkUserId     String
+  tenantId        String
+  email           String
+  firstName       String?
+  lastName        String?
+  imageUrl        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  generatedQuotes GeneratedQuote[]
+  savedQuotes     SavedQuote[]
+  generations     Generation[]
+
+  @@unique([clerkUserId, tenantId])
+  @@index([tenantId])
+  @@map("users")
+}
+
+// ----- Categories --------------------------------------------------------
+// User-defined or system categories used to tag saved items.
+model Category {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  color       String?
+  isSystem    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  savedQuotes SavedQuote[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("categories")
+}
+
+// ----- Generations -------------------------------------------------------
+// One row per AI call. Used for analytics and rate-limit auditing.
+model Generation {
+  id          String           @id @default(cuid())
+  tenantId    String
+  userId      String
+  provider    String
+  model       String
+  prompt      String           @db.Text
+  topic       String?
+  mood        String?
+  itemCount   Int              @default(10)
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quotes      GeneratedQuote[]
+
+  @@index([tenantId, userId])
+  @@index([createdAt])
+  @@map("generations")
+}
+
+// ----- Generated quotes --------------------------------------------------
+// One generated card returned by the AI. Persisted so the same item can
+// later be saved/unsaved without re-generating.
+model GeneratedQuote {
+  id           String       @id @default(cuid())
+  tenantId     String
+  userId       String
+  generationId String?
+  title        String
+  content      String       @db.Text
+  category     String
+  language     String       @default("he")
+  createdAt    DateTime     @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generation   Generation?  @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  saved        SavedQuote[]
+
+  @@index([tenantId, userId])
+  @@index([generationId])
+  @@map("generated_quotes")
+}
+
+// ----- Saved quotes ------------------------------------------------------
+// Wraps a generated quote with optional user-defined category and notes.
+model SavedQuote {
+  id             String        @id @default(cuid())
+  tenantId       String
+  userId         String
+  quoteId        String
+  customCategory String?
+  categoryId     String?
+  isFavorite     Boolean       @default(false)
+  note           String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quote          GeneratedQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  category       Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, quoteId])
+  @@index([tenantId, userId])
+  @@index([categoryId])
+  @@map("saved_quotes")
+}

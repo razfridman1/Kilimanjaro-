@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47% 11.2%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47% 11.2%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47% 11.2%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 199 89% 48%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262 83% 58%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 95%;
+
+    --card: 224 47% 8%;
+    --card-foreground: 213 31% 95%;
+
+    --popover: 224 47% 8%;
+    --popover-foreground: 213 31% 95%;
+
+    --primary: 263 90% 70%;
+    --primary-foreground: 224 71% 4%;
+
+    --secondary: 222 47% 15%;
+    --secondary-foreground: 213 31% 95%;
+
+    --muted: 223 47% 13%;
+    --muted-foreground: 215 16% 65%;
+
+    --accent: 199 89% 60%;
+    --accent-foreground: 224 71% 4%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 28% 18%;
+    --input: 215 28% 18%;
+    --ring: 263 90% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    text-rendering: optimizeLegibility;
+  }
+  /* Hebrew typographic tweaks */
+  [dir="rtl"] body {
+    letter-spacing: 0;
+  }
+  /* Better focus rings, RTL-safe */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  /* Make scrollbars subtle */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-l from-primary via-fuchsia-500 to-accent bg-clip-text text-transparent;
+  }
+  .glass {
+    @apply bg-card/60 backdrop-blur-xl border border-border/60;
+  }
+  /* Logical properties so RTL flips automatically */
+  .rtl-safe-shadow {
+    box-shadow: 0 24px 48px -16px hsl(var(--primary) / 0.25);
+  }
+}
