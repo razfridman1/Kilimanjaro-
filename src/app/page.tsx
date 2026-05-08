@@ -36,11 +36,14 @@ export default async function LandingPage() {
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-hero-gradient">
       <header className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2 font-display text-xl font-extrabold">
+        <div
+          className="flex items-center gap-2 font-display text-xl font-extrabold"
+          dir="ltr"
+        >
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30">
             <Sparkles className="h-5 w-5" />
           </span>
-          <span className="gradient-text">{APP_NAME}</span>
+          <span className="gradient-text">kilimanjaro</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
