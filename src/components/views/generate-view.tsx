@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Wand2, Loader2, RefreshCw } from "lucide-react";
+import {
+  Sparkles,
+  Wand2,
+  Loader2,
+  RefreshCw,
+  History,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,12 +21,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   MotivationCard,
   MotivationCardData,
   MotivationCardSkeleton,
 } from "@/components/motivation-card";
 import { useToast } from "@/hooks/use-toast";
 import { MOOD_OPTIONS } from "@/lib/constants";
+import { formatHebrewDate } from "@/lib/utils";
 
 interface GenerateResponse {
   ok: boolean;
@@ -31,13 +47,124 @@ interface GenerateResponse {
   error?: string;
 }
 
+interface HistoryItem extends MotivationCardData {
+  createdAt: string;
+  savedId: string | null;
+}
+
+const STORAGE_KEY = "kilimanjaro:lastGeneration";
+const HISTORY_PAGE_SIZE = 30;
+
 export function GenerateView() {
   const [items, setItems] = React.useState<MotivationCardData[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [hydrated, setHydrated] = React.useState(false);
   const [topic, setTopic] = React.useState("");
   const [mood, setMood] = React.useState<string>("");
   const { toast } = useToast();
 
+  // History state
+  const [history, setHistory] = React.useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = React.useState(true);
+  const [historyCursor, setHistoryCursor] = React.useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = React.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false);
+
+  // Edit-quote dialog state
+  const [editing, setEditing] = React.useState<MotivationCardData | null>(null);
+  const [editTitle, setEditTitle] = React.useState("");
+  const [editContent, setEditContent] = React.useState("");
+  const [editCategory, setEditCategory] = React.useState("");
+  const [editSubmitting, setEditSubmitting] = React.useState(false);
+
+  // ----- Hydrate current items from localStorage on mount -----
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setItems(parsed as MotivationCardData[]);
+      }
+    } catch {
+      /* ignore */
+    }
+    setHydrated(true);
+  }, []);
+
+  // Persist current items whenever they change (after hydration).
+  React.useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (items.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [items, hydrated]);
+
+  // ----- History fetcher -----
+  const fetchHistory = React.useCallback(
+    async (cursor?: string | null) => {
+      const params = new URLSearchParams();
+      params.set("take", String(HISTORY_PAGE_SIZE));
+      if (cursor) params.set("cursor", cursor);
+      const res = await fetch(`/api/quotes?${params.toString()}`);
+      const json = await res.json();
+      if (!res.ok || !json.ok)
+        throw new Error(json.error ?? "שגיאה בטעינת ההיסטוריה");
+      return {
+        items: json.data.items as HistoryItem[],
+        nextCursor: json.data.nextCursor as string | null,
+      };
+    },
+    [],
+  );
+
+  const loadInitialHistory = React.useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetchHistory();
+      setHistory(res.items);
+      setHistoryCursor(res.nextCursor);
+      setHistoryHasMore(!!res.nextCursor);
+    } catch (err) {
+      toast({
+        title: "שגיאה בטעינת ההיסטוריה",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [fetchHistory, toast]);
+
+  React.useEffect(() => {
+    void loadInitialHistory();
+  }, [loadInitialHistory]);
+
+  const loadMoreHistory = async () => {
+    if (!historyCursor || historyLoadingMore) return;
+    setHistoryLoadingMore(true);
+    try {
+      const res = await fetchHistory(historyCursor);
+      setHistory((prev) => [...prev, ...res.items]);
+      setHistoryCursor(res.nextCursor);
+      setHistoryHasMore(!!res.nextCursor);
+    } catch (err) {
+      toast({
+        title: "שגיאה",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setHistoryLoadingMore(false);
+    }
+  };
+
+  // ----- Generate -----
   const handleGenerate = async () => {
     setLoading(true);
     try {
@@ -54,12 +181,13 @@ export function GenerateView() {
         throw new Error(json.error ?? "שגיאה ביצירת המוטיבציה");
       }
       setItems(json.data.items.map((i) => ({ ...i, saved: false })));
-      // Smooth scroll to results.
       requestAnimationFrame(() => {
         document
           .getElementById("results")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+      // Refresh history so the new generation pushes older items down.
+      void loadInitialHistory();
     } catch (err) {
       toast({
         title: "לא הצלחנו לייצר מוטיבציה",
@@ -71,6 +199,7 @@ export function GenerateView() {
     }
   };
 
+  // ----- Save / Unsave / Favorite (works for both current items and history) -----
   const handleSave = async (item: MotivationCardData) => {
     const res = await fetch("/api/saved", {
       method: "POST",
@@ -84,6 +213,13 @@ export function GenerateView() {
     setItems((prev) =>
       prev.map((it) => (it.id === item.id ? { ...it, saved: true } : it)),
     );
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === item.id
+          ? { ...h, saved: true, savedId: json.data?.savedId ?? null }
+          : h,
+      ),
+    );
   };
 
   const handleUnsave = async (item: MotivationCardData) => {
@@ -92,6 +228,11 @@ export function GenerateView() {
     if (!res.ok || !json.ok) throw new Error(json.error ?? "שגיאה בהסרה");
     setItems((prev) =>
       prev.map((it) => (it.id === item.id ? { ...it, saved: false } : it)),
+    );
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === item.id ? { ...h, saved: false, savedId: null } : h,
+      ),
     );
   };
 
@@ -102,6 +243,11 @@ export function GenerateView() {
         it.id === item.id ? { ...it, isFavorite: next } : it,
       ),
     );
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === item.id ? { ...h, isFavorite: next } : h,
+      ),
+    );
     if (item.saved) {
       await fetch(`/api/saved/${item.id}`, {
         method: "PATCH",
@@ -110,6 +256,77 @@ export function GenerateView() {
       });
     }
   };
+
+  // ----- Edit a quote (history only — opens dialog) -----
+  const openEdit = (item: MotivationCardData) => {
+    setEditing(item);
+    setEditTitle(item.title);
+    setEditContent(item.content);
+    setEditCategory(item.category);
+  };
+
+  const submitEdit = async () => {
+    if (!editing) return;
+    if (!editTitle.trim() || !editContent.trim()) {
+      toast({ title: "כותרת ותוכן חובה", variant: "destructive" });
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const res = await fetch(`/api/quotes/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          content: editContent.trim(),
+          category: editCategory.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok)
+        throw new Error(json.error ?? "שגיאה בעדכון");
+      const updated = json.data as Pick<
+        HistoryItem,
+        "id" | "title" | "content" | "category"
+      >;
+      const apply = <T extends MotivationCardData>(t: T): T =>
+        t.id === updated.id
+          ? { ...t, title: updated.title, content: updated.content, category: updated.category }
+          : t;
+      setItems((prev) => prev.map(apply));
+      setHistory((prev) => prev.map(apply));
+      toast({ title: "עודכן בהצלחה" });
+      setEditing(null);
+    } catch (err) {
+      toast({
+        title: "שגיאה בעדכון",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // ----- Delete a quote permanently (history) -----
+  const handleDeleteQuote = async (item: MotivationCardData) => {
+    const res = await fetch(`/api/quotes/${item.id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error ?? "שגיאה במחיקה");
+    setHistory((prev) => prev.filter((h) => h.id !== item.id));
+    setItems((prev) => prev.filter((it) => it.id !== item.id));
+  };
+
+  // History excludes items currently visible in the "results" section above
+  // to avoid showing duplicates.
+  const currentIds = React.useMemo(
+    () => new Set(items.map((i) => i.id)),
+    [items],
+  );
+  const visibleHistory = React.useMemo(
+    () => history.filter((h) => !currentIds.has(h.id)),
+    [history, currentIds],
+  );
 
   return (
     <div className="space-y-10">
@@ -129,7 +346,7 @@ export function GenerateView() {
             <span className="gradient-text">קילימנג'רו</span>
           </h1>
           <p className="max-w-2xl text-balance text-base text-muted-foreground sm:text-lg">
-            לחץ על הכפתור ותקבל מיד עשרה רעיונות, ציטוטים וטיפים מעשיים בעברית –
+            לחץ על הכפתור ותקבל מיד שישה רעיונות, ציטוטים וטיפים מעשיים בעברית –
             מותאמים למצב הרוח והנושא שתבחר.
           </p>
 
@@ -235,6 +452,8 @@ export function GenerateView() {
                     onSave={handleSave}
                     onUnsave={handleUnsave}
                     onToggleFavorite={handleToggleFavorite}
+                    onEdit={openEdit}
+                    onDelete={handleDeleteQuote}
                   />
                 ))}
               </div>
@@ -260,6 +479,149 @@ export function GenerateView() {
           )}
         </AnimatePresence>
       </section>
+
+      {/* History */}
+      <section className="space-y-4 border-t border-border/40 pt-8">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <History className="h-5 w-5" />
+            </span>
+            <h2 className="font-display text-2xl font-bold">היסטוריה</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            כל המוטיבציות שייצרת – ניתן לערוך, למחוק ולשמור מחדש.
+          </p>
+        </div>
+
+        {historyLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <MotivationCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : visibleHistory.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 bg-card/40 p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              עדיין אין פריטים בהיסטוריה. צור מוטיבציה חדשה והם יופיעו כאן.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleHistory.map((item, idx) => (
+                <div key={item.id} className="space-y-1.5">
+                  <MotivationCard
+                    item={item}
+                    index={idx}
+                    onSave={handleSave}
+                    onUnsave={handleUnsave}
+                    onToggleFavorite={handleToggleFavorite}
+                    onEdit={openEdit}
+                    onDelete={handleDeleteQuote}
+                  />
+                  <p className="px-2 text-[11px] text-muted-foreground">
+                    נוצר ב-{formatHebrewDate(item.createdAt)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {historyHasMore && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  onClick={loadMoreHistory}
+                  disabled={historyLoadingMore}
+                >
+                  {historyLoadingMore ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      טוען…
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      טען עוד
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* Edit dialog */}
+      <Dialog
+        open={!!editing}
+        onOpenChange={(open) => !open && setEditing(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>עריכת פריט</DialogTitle>
+            <DialogDescription>
+              עדכן את הכותרת, התוכן או הקטגוריה. השינוי יישמר באופן קבוע.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-title-q">כותרת</Label>
+              <Input
+                id="edit-title-q"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                disabled={editSubmitting}
+                maxLength={120}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-content-q">תוכן</Label>
+              <textarea
+                id="edit-content-q"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                disabled={editSubmitting}
+                maxLength={2000}
+                rows={4}
+                className="flex w-full rounded-xl border border-input bg-background px-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-cat-q">קטגוריה</Label>
+              <Input
+                id="edit-cat-q"
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                disabled={editSubmitting}
+                maxLength={60}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setEditing(null)}
+              disabled={editSubmitting}
+            >
+              ביטול
+            </Button>
+            <Button
+              variant="gradient"
+              onClick={submitEdit}
+              disabled={editSubmitting}
+            >
+              {editSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  שומר…
+                </>
+              ) : (
+                "שמור שינויים"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

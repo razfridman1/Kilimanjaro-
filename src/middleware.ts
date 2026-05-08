@@ -9,6 +9,7 @@ const isProtectedRoute = createRouteMatcher([
   "/saved(.*)",
   "/api/generate(.*)",
   "/api/saved(.*)",
+  "/api/quotes(.*)",
   "/api/categories(.*)",
 ]);
 

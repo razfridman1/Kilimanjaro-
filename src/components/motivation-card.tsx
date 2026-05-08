@@ -2,10 +2,27 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Bookmark, BookmarkCheck, Heart, Share2, Copy, Check } from "lucide-react";
+import {
+  Bookmark,
+  BookmarkCheck,
+  Heart,
+  Share2,
+  Copy,
+  Check,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +41,8 @@ interface MotivationCardProps {
   onSave?: (item: MotivationCardData) => Promise<void> | void;
   onUnsave?: (item: MotivationCardData) => Promise<void> | void;
   onToggleFavorite?: (item: MotivationCardData) => Promise<void> | void;
+  onEdit?: (item: MotivationCardData) => void;
+  onDelete?: (item: MotivationCardData) => Promise<void> | void;
   className?: string;
 }
 
@@ -33,6 +52,8 @@ export function MotivationCard({
   onSave,
   onUnsave,
   onToggleFavorite,
+  onEdit,
+  onDelete,
   className,
 }: MotivationCardProps) {
   const [isPending, startTransition] = React.useTransition();
@@ -85,6 +106,25 @@ export function MotivationCard({
     } catch {
       toast({ title: "לא ניתן להעתיק", variant: "destructive" });
     }
+  };
+
+  const handleDelete = () => {
+    if (!onDelete) return;
+    if (typeof window !== "undefined" && !window.confirm("למחוק את הפריט הזה?")) {
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await onDelete(item);
+        toast({ title: "נמחק" });
+      } catch (err) {
+        toast({
+          title: "שגיאה במחיקה",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   const handleShare = async () => {
@@ -185,6 +225,34 @@ export function MotivationCard({
               >
                 <Share2 className="h-4 w-4" />
               </Button>
+
+              {(onEdit || onDelete) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" aria-label="עוד">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {onEdit && (
+                      <DropdownMenuItem onClick={() => onEdit(item)}>
+                        <Pencil className="me-2 h-4 w-4" />
+                        ערוך
+                      </DropdownMenuItem>
+                    )}
+                    {onEdit && onDelete && <DropdownMenuSeparator />}
+                    {onDelete && (
+                      <DropdownMenuItem
+                        onClick={handleDelete}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="me-2 h-4 w-4" />
+                        מחק לצמיתות
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </div>
         </CardContent>
